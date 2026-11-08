@@ -1,14 +1,14 @@
-name: Review Panel MCP server tests
+name: Review Panel local MCP server tests
 
 on:
   pull_request:
     paths:
-      - 'mcp/**'
+      - 'mcp-local/**'
       - '.github/workflows/review-panel-mcp-tests.yml'
   push:
     branches: [main]
     paths:
-      - 'mcp/**'
+      - 'mcp-local/**'
       - '.github/workflows/review-panel-mcp-tests.yml'
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: mcp
+        working-directory: mcp-local
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

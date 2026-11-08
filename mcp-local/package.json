@@ -1,0 +1,22 @@
+{
+  "name": "review-panel-mcp-local",
+  "version": "0.1.0",
+  "description": "MCP server that sends any of your GitHub repos to three AI judges (Claude for workflows, Gemini for UI/UX, Codex for code structure) and returns one scored report.",
+  "type": "module",
+  "bin": {
+    "review-panel-mcp-local": "server.js"
+  },
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "license": "MIT"
+}
