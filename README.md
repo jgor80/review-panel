@@ -1,5 +1,9 @@
 # Review Panel
 
+For a standalone **Codex version focused on production engineering**, see
+[Codex Engineering Review](codex/README.md). Install its user-wide skill once to
+invoke it across local repositories, or run its read-only CLI launcher directly.
+
 A multi-judge code review for Claude Code. Five judges with different philosophies
 (skeptic, home-team advocate, correctness, security, maintainer) review the same change
 against one shared rubric; a referee rules on the evidence and issues the verdict.
