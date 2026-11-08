@@ -57,6 +57,7 @@ The argument picks what to do. No argument means `review`.
 | `init` | Draft this repo's `REVIEW_PANEL.md` and `.review-panel/` from the code | §10 |
 | `ci pr <n>` | Unattended pull request review for GitHub Actions | §11 |
 | `ci nightly` | Unattended review of commits pushed to the default branch in the last 24 h | §11 |
+| `ci review` · `ci deep` · `ci audit` · `ci gate` | Unattended branch review, forced Deep, whole-codebase audit or production gate (on-demand runs from the MCP server) | §11 |
 | `ledger` | Reconcile ledger statuses against merged code | §12 |
 | `calibrate` | Read ledgers and propose judge tuning | §13 |
 
@@ -240,8 +241,9 @@ took in the report. Never edit source files, commit, or push in this mode.
 1. Scope = `git diff origin/<base>...HEAD` for the pull request. `<base>` is in the
    `PANEL_BASE` environment variable when set, otherwise the default branch.
 2. Intent = the PR title and body (in `PANEL_PR_TITLE` / `PANEL_PR_BODY` when set) plus
-   commit messages.
-3. Mode from the changed files:
+   commit messages. Add `PANEL_FOCUS` when set.
+3. If `PANEL_COMMAND` is `deep`, `audit` or `gate`, use Deep (and for `gate` also run §7).
+   Otherwise pick the mode from the changed files:
    - only docs, images, generated or out-of-scope files → write verdict `SKIP` and stop;
    - any file matching `require_security_for` → Deep;
    - ≤ 50 changed lines outside critical paths → Quick;
@@ -260,7 +262,19 @@ took in the report. Never edit source files, commit, or push in this mode.
    from its "Ledger rows" section.
 4. Run §12 `ledger` with those rows plus this run's rows.
 
-**Output contract (both).** Write exactly these files; the workflow reads them:
+**`ci review` · `ci deep` · `ci audit` · `ci gate`** (on demand, any repo)
+1. The checked-out commit is what to review. `PANEL_BASE` is the default branch.
+2. `ci review` / `ci deep`: scope = `git diff origin/<base>...HEAD`. If that diff is empty
+   (the default branch itself was asked for), review the last 20 commits on it instead and
+   say so. `ci deep` forces Deep.
+3. `ci audit`: §0 Audit scope, Deep mode, sliced by `critical_paths`.
+4. `ci gate`: §7 only, on the whole codebase.
+5. Intent = `PANEL_FOCUS` when set, otherwise the repo's README and recent commit messages.
+   If the repo has no `REVIEW_PANEL.md`, infer one as §1 says and note it in the report;
+   don't write the file.
+6. Don't write the ledger in these modes; put new rows only in `ledger-rows.md`.
+
+**Output contract (all `ci` commands).** Write exactly these files; the workflow reads them:
 - `.review-panel/out/report.md` — the full report from `report-template.md`.
 - `.review-panel/out/verdict.txt` — one word: `SHIP`, `FIX_FIRST`, `BLOCK` or `SKIP`.
 - `.review-panel/out/summary.md` — at most 15 lines: verdict, panel score, and one line per

@@ -1,0 +1,75 @@
+# Tests the Review Panel MCP server on every change to mcp/, and deploys it to Cloudflare on main.
+# Deploy needs these repo secrets: CLOUDFLARE_API_TOKEN (Workers edit), CLOUDFLARE_ACCOUNT_ID,
+# REVIEW_MCP_KEY (the connector key) and REVIEW_PANEL_GITHUB_TOKEN (also used by review-on-demand.yml).
+name: Review Panel MCP server
+
+on:
+  pull_request:
+    paths: ["mcp/**", ".github/workflows/review-panel-mcp.yml"]
+  push:
+    branches: [main]
+    paths: ["mcp/**", ".github/workflows/review-panel-mcp.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-panel-mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mcp
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MCP_KEY: ${{ secrets.REVIEW_MCP_KEY }}
+      GH_PANEL_TOKEN: ${{ secrets.REVIEW_PANEL_GITHUB_TOKEN }}
+    steps:
+      - name: Check secrets
+        id: s
+        working-directory: .
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::warning::Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets."; fi
+      - uses: actions/checkout@v6
+        if: steps.s.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: steps.s.outputs.ok == 'true'
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+        if: steps.s.outputs.ok == 'true'
+      - run: npx wrangler deploy
+        if: steps.s.outputs.ok == 'true'
+      - name: Sync the Worker's secrets
+        if: steps.s.outputs.ok == 'true'
+        run: |
+          [ -z "$MCP_KEY" ] || printf '%s' "$MCP_KEY" | npx wrangler secret put MCP_KEY
+          [ -z "$GH_PANEL_TOKEN" ] || printf '%s' "$GH_PANEL_TOKEN" | npx wrangler secret put GITHUB_TOKEN
