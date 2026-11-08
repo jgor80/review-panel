@@ -1,0 +1,18 @@
+{
+  // Review Panel MCP server: lets AI apps start a Review Panel run on any repo and read the report.
+  // Secrets (wrangler secret put …, or the Cloudflare dashboard):
+  //   MCP_KEY       long random string; the connector URL is https://<worker>/mcp/<MCP_KEY>
+  //   GITHUB_TOKEN  fine-grained token: Actions read + write on jgor80/review-panel,
+  //                 and Contents + Metadata read on the repos you want listed
+  "name": "review-panel-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "keep_vars": true,
+  "vars": {
+    "PANEL_REPO": "jgor80/review-panel",
+    "WORKFLOW_FILE": "review-on-demand.yml",
+    "WORKFLOW_REF": "main",
+    // Comma list of GitHub owners the panel may review. Empty = any repo the tokens can read.
+    "ALLOWED_OWNERS": "jgor80"
+  }
+}

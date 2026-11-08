@@ -1,0 +1,162 @@
+# Review Panel (on demand) — reviews any repo, pull request or branch when asked.
+# Started by the Review Panel MCP server (mcp/) from an AI app, or by hand from the Actions tab.
+# Nothing runs on its own: no pull_request or schedule triggers.
+#
+# Secrets (Settings → Secrets and variables → Actions, in this repo):
+#   ANTHROPIC_API_KEY          pays for the review
+#   REVIEW_PANEL_GITHUB_TOKEN  fine-grained token: Contents + Pull requests read on the repos you
+#                              want reviewed (Pull requests + Issues write too if you want comments)
+name: Review Panel (on demand)
+run-name: "review ${{ inputs.request_id }} · ${{ inputs.repo }} ${{ inputs.pr && format('#{0}', inputs.pr) || inputs.ref }} · ${{ inputs.command }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repo to review (owner/name)"
+        required: true
+      pr:
+        description: "Pull request number (leave empty to review a branch or the whole codebase)"
+        required: false
+        default: ""
+      ref:
+        description: "Branch, tag or commit (default: the repo's default branch; ignored with a PR)"
+        required: false
+        default: ""
+      command:
+        description: "review = the change vs the default branch, deep = forced Deep, audit = whole codebase, gate = production gate"
+        required: true
+        default: review
+        type: choice
+        options: [review, deep, audit, gate]
+      focus:
+        description: "Optional: what to look at or worry about (passed to the panel as intent)"
+        required: false
+        default: ""
+      post_comment:
+        description: "Also post the summary as a comment on the PR"
+        type: boolean
+        default: false
+      request_id:
+        description: "Set by the MCP server to find this run again"
+        required: false
+        default: manual
+
+concurrency:
+  group: review-on-demand-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    env:
+      TARGET_REPO: ${{ inputs.repo }}
+      PR: ${{ inputs.pr }}
+      COMMAND: ${{ inputs.command }}
+      GH_REPO: ${{ inputs.repo }}
+      GH_TOKEN: ${{ secrets.REVIEW_PANEL_GITHUB_TOKEN }}
+    steps:
+      - name: Check inputs and secrets
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_TOKEN: ${{ secrets.REVIEW_PANEL_GITHUB_TOKEN != '' }}
+        run: |
+          [ "$HAS_KEY" = "true" ] || { echo "::error::Add the ANTHROPIC_API_KEY secret to this repo."; exit 1; }
+          [ "$HAS_TOKEN" = "true" ] || { echo "::error::Add the REVIEW_PANEL_GITHUB_TOKEN secret (a token that can read $TARGET_REPO)."; exit 1; }
+          echo "$TARGET_REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::repo must look like owner/name"; exit 1; }
+          [ -z "$PR" ] || echo "$PR" | grep -Eq '^[0-9]+$' || { echo "::error::pr must be a number"; exit 1; }
+
+      - name: Work out what to check out
+        id: target
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          DEFAULT=$(gh api "repos/$TARGET_REPO" --jq .default_branch)
+          if [ -n "$PR" ]; then
+            gh pr view "$PR" --json baseRefName,title,body > "$RUNNER_TEMP/pr.json"
+            echo "base=$(jq -r .baseRefName "$RUNNER_TEMP/pr.json")" >> "$GITHUB_OUTPUT"
+            echo "ref=refs/pull/$PR/head" >> "$GITHUB_OUTPUT"
+            {
+              echo "title<<PANEL_EOF"; jq -r .title "$RUNNER_TEMP/pr.json"; echo "PANEL_EOF"
+              echo "body<<PANEL_EOF"; jq -r '.body // ""' "$RUNNER_TEMP/pr.json" | head -c 20000; echo; echo "PANEL_EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "base=$DEFAULT" >> "$GITHUB_OUTPUT"
+            echo "ref=${REF:-$DEFAULT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repo }}
+          token: ${{ secrets.REVIEW_PANEL_GITHUB_TOKEN }}
+          ref: ${{ steps.target.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Fetch the base branch
+        run: |
+          git fetch --no-tags origin "${{ steps.target.outputs.base }}"
+          mkdir -p .review-panel/out
+
+      - name: Run the panel
+        id: panel
+        uses: anthropics/claude-code-action@v1
+        env:
+          PANEL_BASE: ${{ steps.target.outputs.base }}
+          PANEL_PR_TITLE: ${{ steps.target.outputs.title }}
+          PANEL_PR_BODY: ${{ steps.target.outputs.body }}
+          PANEL_FOCUS: ${{ inputs.focus }}
+          PANEL_COMMAND: ${{ inputs.command }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.REVIEW_PANEL_GITHUB_TOKEN }}
+          plugin_marketplaces: "https://github.com/jgor80/review-panel.git"
+          plugins: "review-panel@jgor80-tools"
+          prompt: "/review-panel:review-panel ci ${{ inputs.pr && format('pr {0}', inputs.pr) || inputs.command }}"
+          claude_args: |
+            --max-turns 150
+            --allowedTools "Read,Grep,Glob,Write,Agent,Task,TodoWrite,Bash(git:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(deno:*),Bash(python3:*),Bash(ls:*),Bash(jq:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(find:*),Bash(sed -n:*),Bash(sort:*),Bash(uniq:*),Bash(diff:*),Bash(mkdir:*),Bash(cd:*),Bash(echo:*),Bash(test:*)"
+
+      - name: Read verdict
+        id: v
+        if: always()
+        run: |
+          V=$(tr -d '[:space:]' < .review-panel/out/verdict.txt 2>/dev/null || true)
+          echo "verdict=${V:-ERROR}" >> "$GITHUB_OUTPUT"
+          echo "Verdict: ${V:-ERROR}" >> "$GITHUB_STEP_SUMMARY"
+          [ -s .review-panel/out/summary.md ] && cat .review-panel/out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+          # Small machine-readable file the MCP server reads first
+          jq -n --arg verdict "${V:-ERROR}" --arg repo "$TARGET_REPO" --arg pr "$PR" \
+                --arg ref "${{ steps.target.outputs.ref }}" --arg command "$COMMAND" \
+                --arg request_id "${{ inputs.request_id }}" \
+                '{verdict:$verdict, repo:$repo, pr:$pr, ref:$ref, command:$command, request_id:$request_id}' \
+                > .review-panel/out/result.json
+
+      - name: Post the summary on the PR
+        if: always() && inputs.post_comment && inputs.pr != '' && steps.v.outputs.verdict != 'ERROR' && steps.v.outputs.verdict != 'SKIP'
+        run: |
+          {
+            echo "<!-- review-panel -->"
+            cat .review-panel/out/summary.md
+            echo
+            echo "<details><summary>Full report</summary>"
+            echo
+            head -c 50000 .review-panel/out/report.md
+            echo
+            echo "</details>"
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comment.md" \
+            || echo "::warning::Couldn't comment; give REVIEW_PANEL_GITHUB_TOKEN Pull requests write on $TARGET_REPO."
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-panel-report
+          path: .review-panel/out/
+          include-hidden-files: true
+          if-no-files-found: ignore
