@@ -1,0 +1,14 @@
+{
+  "name": "jgor80-tools",
+  "description": "Jeff Gorski's shared Claude Code tools",
+  "owner": {
+    "name": "Jeff Gorski"
+  },
+  "plugins": [
+    {
+      "name": "review-panel",
+      "source": "./plugins/review-panel",
+      "description": "Multi-judge code review: skeptic, advocate, correctness, security and maintainer judges, refereed, with scored rounds and a production gate"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "review-panel",
+  "description": "Multi-judge code review: skeptic, advocate, correctness, security and maintainer judges, refereed, with scored rounds and a production gate",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeff Gorski"
+  }
+}
