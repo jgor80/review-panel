@@ -14,9 +14,10 @@ loop (Tech SEO Connect 2026).
 
 | Where | What happens |
 |---|---|
-| Every pull request | GitHub Action runs the panel, posts one comment (updated on each push), labels the PR `panel: ship / fix-first / block`, fails the check on BLOCK |
-| Every night | Reviews commits pushed straight to the default branch, opens an issue only if something needs attention, opens a PR with ledger updates |
+| From any AI app (MCP) | Ask for a review of any repo, PR, branch or whole codebase; it runs in GitHub Actions and the AI reads back the report. See [mcp/](mcp/README.md) |
 | On demand in Claude Code | `/review-panel:review-panel` plus a command (below) |
+| A pull request, when asked | Actions → Review Panel → Run workflow with the PR number: posts one comment, labels the PR `panel: ship / fix-first / block`, fails the check on BLOCK. It doesn't run on every PR |
+| Every night | Reviews commits pushed straight to the default branch, opens an issue only if something needs attention, opens a PR with ledger updates |
 
 ## Install in Claude Code (once per machine)
 
@@ -52,6 +53,7 @@ claude plugin install review-panel@jgor80-tools
 
 ```
 .claude-plugin/marketplace.json          marketplace "jgor80-tools"
+mcp/                                     MCP server (Cloudflare Worker) for on-demand reviews from AI apps
 plugins/review-panel/
   .claude-plugin/plugin.json
   skills/review-panel/
