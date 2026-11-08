@@ -4,6 +4,10 @@ For a standalone **Codex version focused on production engineering**, see
 [Codex Engineering Review](codex/README.md). Install its user-wide skill once to
 invoke it across local repositories, or run its read-only CLI launcher directly.
 
+**New: [Review Panel MCP server](mcp/README.md).** One MCP tool that reviews any of your
+GitHub repos with Claude (workflows and functionality, as product manager), Gemini (UI/UX)
+and Codex (code structure) in parallel, and returns one scored report.
+
 A multi-judge code review for Claude Code. Five judges with different philosophies
 (skeptic, home-team advocate, correctness, security, maintainer) review the same change
 against one shared rubric; a referee rules on the evidence and issues the verdict.
@@ -63,6 +67,7 @@ plugins/review-panel/
 templates/                               same templates, for browsing
 examples/                                configs for each app, seed-test report
 docs/ROLLOUT.md
+mcp/                                     MCP server: Claude + Gemini + Codex judges for any repo
 ```
 
 Each app repo holds only its `REVIEW_PANEL.md` and `.review-panel/` (reports and ledger).
