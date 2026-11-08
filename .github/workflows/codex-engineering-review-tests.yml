@@ -1,0 +1,26 @@
+name: Codex engineering review package tests
+
+on:
+  pull_request:
+    paths:
+      - 'codex/**'
+      - '.github/workflows/codex-engineering-review-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'codex/**'
+      - '.github/workflows/codex-engineering-review-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Test installer and launcher without model calls
+        run: python3 -m unittest discover -s codex/tests -v
