@@ -1,13 +1,15 @@
-# Review Panel local MCP server (three judges)
+# Review Panel local MCP server (four judges)
 
-One MCP tool that reviews any of your GitHub repos with three AI judges at once, and
-gives you back one scored report.
+One MCP tool that reviews any of your GitHub repos with four AI judges at once, and
+gives you back one scored report that shows each judge's working and calls out the
+harshest one as **the Russian judge**.
 
 | Judge | Runs on | Judges |
 |---|---|---|
 | Product manager | Claude | Workflows and functionality: walks each user journey end to end, from a real person's point of view |
-| UX designer | Gemini | UI and user experience: screens, states, copy, accessibility |
+| UX designer | Claude (Gemini until 2026-11-09) | UI and user experience: screens, states, copy, accessibility |
 | Engineer | Codex | Code structure: boundaries, data integrity, failure handling, tests |
+| Counsel | Claude | Legal, privacy and platform rules: data-protection law (GDPR, CCPA/CPRA), children (COPPA), app-store, Discord and API terms, copyright and licensing, payments, contests, marketing law. It maps what the app collects and shows, then checks each against the rules that apply to that app. Not legal advice. |
 
 The roles come from David Bell's Tech SEO Connect 2026 talk: Claude as product manager,
 Gemini on UX and design, Codex building the code. The judging style is from that talk too.
@@ -93,10 +95,18 @@ The tools:
 A review takes a few minutes, so `start_review` returns straight away and `get_review`
 collects the result. Reports are saved to `~/.review-panel/reports/<owner>__<repo>/`.
 
-**The report** starts with a scoreboard. It shows each judge's score and verdict, then the
+**The report** opens with **the Russian judge**: the judge scoring furthest below the
+median of the others, shown in a banner with its score, the gap, what sank it and its
+harshest criteria. It's only called out when the gap is at least 1.5 points (`russianGap`
+in config.json); otherwise the report says there isn't one this round.
+
+Then the scoreboard. It shows each judge's score, how far it sits from the rest ("vs rest"),
+its findings by severity, the cap or finding that set its score, and its verdict, then the
 panel score, which is the median. The overall verdict is the most serious one any judge
 gave: `SHIP`, `FIX_FIRST` or `BLOCK`. If the panel score is below the good-enough mark
-(8.5), a `SHIP` becomes `FIX_FIRST`. After the scoreboard comes each judge's full review.
+(8.5), a `SHIP` becomes `FIX_FIRST`. Next, "How each judge got its score": every judge's per-criterion table (score, the
+files and lines it read as evidence, and why), and its steps from criteria to the final
+number, including any cap. After that comes each judge's full review.
 
 If the repo has a `REVIEW_PANEL.md` (see `../templates/`), every judge gets it as the
 spec, along with the README, AGENTS.md, CLAUDE.md and the file list.
@@ -110,6 +120,7 @@ Create `~/.review-panel/config.json`. Anything you leave out keeps its default.
   "defaultOwner": "jgor80",
   "timeoutMinutes": 20,
   "goodEnough": 8.5,
+  "russianGap": 1.5,
   "runners": {
     "gemini": { "command": ["gemini", "-m", "gemini-2.5-pro", "--approval-mode", "default", "-p", "Follow the review instructions above and write your review."] }
   },
@@ -123,7 +134,8 @@ Create `~/.review-panel/config.json`. Anything you leave out keeps its default.
   If you'd rather pass it as an argument, put `"{prompt}"` where it goes.
 - A judge is a title, an instructions file (in `judges/` or a full path) and a runner. The
   output format every judge must follow is `judges/_output-contract.md`.
-- Edit `judges/product-manager.md`, `ui-ux.md` or `code-structure.md` to tune a judge.
+- Edit `judges/product-manager.md`, `ui-ux.md`, `code-structure.md` or `legal-compliance.md` to tune a judge.
+- To put Gemini back on UI/UX: `"judges": { "ui": { "runner": "gemini" } }`.
 
 ## Safety
 
@@ -139,7 +151,7 @@ Create `~/.review-panel/config.json`. Anything you leave out keeps its default.
 
 `mcp/` is the hosted connector (a Cloudflare Worker). It runs the Claude-only five-judge panel
 in GitHub Actions and is paid for with an Anthropic API key. This server is the local one. It runs
-three different AIs on your own machine through their CLIs, so it needs no keys and no deploy.
+several AIs on your own machine through their CLIs, so it needs no keys and no deploy.
 Name them differently in your AI app (`review-panel` and `review-panel-local`) so both can be
 installed.
 

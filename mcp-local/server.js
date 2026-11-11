@@ -43,9 +43,10 @@ server.registerTool("list_judges", {
 server.registerTool("start_review", {
   title: "Start a review",
   description:
-    "Send a repo (the whole app, or one pull request) to the review panel. By default three judges run at the same time: " +
-    "Claude judges workflows and functionality as a product manager, Gemini judges UI/UX, and Codex judges code structure. " +
-    "Each runs read-only on a fresh copy of the repo and returns findings and a score out of 10. Returns a review_id at once; " +
+    "Send a repo (the whole app, or one pull request) to the review panel. By default four judges run at the same time: " +
+    "Claude judges workflows and functionality as a product manager, Claude judges UI/UX, Codex judges code structure, and Claude " +
+    "judges legal, privacy and platform-rule compliance. Each runs read-only on a fresh copy of the repo and returns a per-criterion " +
+    "score breakdown with evidence, findings and a score out of 10; the report calls out the harshest outlier as the Russian judge. Returns a review_id at once; " +
     "reviews take several minutes, so call get_review with wait_seconds to collect the report.",
   inputSchema: {
     repo: z.string().describe("owner/name, for example jgor80/bleacherbums"),

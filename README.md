@@ -4,9 +4,10 @@ For a standalone **Codex version focused on production engineering**, see
 [Codex Engineering Review](codex/README.md). Install its user-wide skill once to
 invoke it across local repositories, or run its read-only CLI launcher directly.
 
-**New: [local three-judge MCP server](mcp-local/README.md).** Runs on your computer and reviews
-any of your GitHub repos with Claude (workflows and functionality, as product manager), Gemini
-(UI/UX) and Codex (code structure) in parallel, returning one scored report. The hosted
+**New: [local four-judge MCP server](mcp-local/README.md).** Runs on your computer and reviews
+any of your GitHub repos with Claude (workflows and functionality, as product manager), Claude
+(UI/UX), Codex (code structure) and Claude (legal, privacy and platform rules) in parallel,
+returning one scored report that shows each judge's working and calls out the Russian judge. The hosted
 Claude-only connector is in [mcp/](mcp/README.md).
 
 A multi-judge code review for Claude Code. Five judges with different philosophies
