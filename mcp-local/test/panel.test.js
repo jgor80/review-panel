@@ -171,6 +171,10 @@ test("judges tied on the harshest score are all Russian judges", () => {
   });
   assert.deepEqual(russianJudges.map((r) => [r.key, r.below]), [["product", 1.5], ["code", 1.5]]);
   assert.match(markdown, /2 judges tied as the Russian judge/);
+  const nocap = combineReport({ repo: "a/b", sha: "0123456789abcdef", goodEnough: 8.5, date: "d", results: [
+    { key: "a", title: "A", runner: "x", status: "done", score: 7, output: "## How I got to the overall score\n- Average 7\n- No Critical or High findings, so no cap applies.\n- Final: 7\n\n## Findings\n### [Medium] Leads go nowhere\n\nSCORE: 7" },
+  ] }).markdown;
+  assert.match(nocap, /\| Top finding: \[Medium\] Leads go nowhere \|/);
   assert.match(markdown, /> ## 🇷🇺 product/);
   assert.match(markdown, /> ## 🇷🇺 code/);
 });

@@ -146,7 +146,7 @@ export function findRussianJudge(results, gap = 1.5) {
 
 function whatSetTheScore(r) {
   const steps = parseScoreSteps(r.output);
-  const cap = steps.find((s) => /\bcap/i.test(s));
+  const cap = steps.find((s) => /\bcap/i.test(s) && !/\bno\b[^.]*\bcap/i.test(s));
   if (cap) return cap;
   const { items } = parseFindings(r.output);
   if (items.length) return `Top finding: [${items[0].severity}] ${items[0].title}`;
