@@ -17,7 +17,8 @@ test("server lists its tools and judges over stdio", async () => {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((t) => t.name).sort(), ["get_review", "list_judges", "list_repos", "list_reviews", "start_review"]);
     const judges = JSON.parse((await client.callTool({ name: "list_judges", arguments: {} })).content[0].text);
-    assert.deepEqual(judges.map((j) => j.runs_on), ["claude", "gemini", "codex"]);
+    assert.deepEqual(judges.map((j) => j.key), ["product", "ui", "code", "legal"]);
+    assert.deepEqual(judges.map((j) => j.runs_on), ["claude", "claude", "codex", "claude"]);
     const bad = await client.callTool({ name: "start_review", arguments: { repo: "not a repo" } });
     assert.equal(bad.isError, true);
   } finally {

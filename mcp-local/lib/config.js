@@ -38,12 +38,19 @@ export const DEFAULT_JUDGES = {
   ui: {
     title: "UX designer (UI and user experience)",
     file: "ui-ux.md",
-    runner: "gemini",
+    // Gemini was dropped from the default panel on 2026-11-09; set runner to "gemini"
+    // in config.json to bring it back.
+    runner: "claude",
   },
   code: {
     title: "Engineer (code structure)",
     file: "code-structure.md",
     runner: "codex",
+  },
+  legal: {
+    title: "Counsel (legal, privacy and platform rules)",
+    file: "legal-compliance.md",
+    runner: "claude",
   },
 };
 
@@ -82,5 +89,8 @@ export function loadConfig() {
     timeoutMinutes: Number(user.timeoutMinutes) > 0 ? Number(user.timeoutMinutes) : 20,
     goodEnough: Number(user.goodEnough) > 0 ? Number(user.goodEnough) : 8.5,
     defaultOwner: typeof user.defaultOwner === "string" ? user.defaultOwner : undefined,
+    // A judge whose score is at least this far below the rest of the panel is called out
+    // as the Russian judge.
+    russianGap: Number(user.russianGap) > 0 ? Number(user.russianGap) : 1.5,
   };
 }

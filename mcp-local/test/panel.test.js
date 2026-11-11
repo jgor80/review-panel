@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { parseScore, median, combineReport, buildPrompt } from "../lib/panel.js";
+import { parseScore, median, combineReport, buildPrompt, parseFindings, parseBreakdown, parseScoreSteps, findRussianJudge } from "../lib/panel.js";
 import { normalizeRepo, validateRef } from "../lib/repos.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,7 +35,7 @@ test("combineReport takes the worst verdict and flags missing judges", () => {
   assert.equal(verdict, "FIX_FIRST");
   assert.equal(panelScore, 7.5);
   assert.match(markdown, /1 of 3 judges did not report/);
-  assert.match(markdown, /\| Eng \| codex \| n\/a \| did not run \| not installed \|/);
+  assert.match(markdown, /\| Eng \| codex \| n\/a \|  \|  \| did not run \|  \| not installed \|/);
 });
 
 test("all SHIP but below good-enough becomes FIX_FIRST", () => {
@@ -96,9 +96,69 @@ test("end to end: three fake judges, one failing, report saved", async () => {
   assert.equal(r.verdict, "FIX_FIRST");
   assert.equal(r.panel_score, 7.5);
   assert.match(r.report, /Fake judge read the brief: true\. cwd has README: true/);
-  assert.match(r.report, /Engineer \| codex \| n\/a \| did not run \| exited with code 3: boom/);
+  assert.match(r.report, /Engineer \| codex \| n\/a \|  \|  \| did not run \|  \| exited with code 3: boom/);
   const saved = await readFile(r.report_path, "utf8");
   assert.equal(saved, r.report);
   const list = await listReviews({});
   assert.equal(list[0].review_id, started.review_id);
+});
+
+const REVIEW = `## Summary
+Harsh but fair.
+
+## Score breakdown
+| Criterion | Score | Evidence | Why |
+|---|---|---|---|
+| Data integrity | 3 | sync/a.py:10-20 | Corrections never upload |
+| **Tests** | 6/10 | none found | No tests, but small app |
+| Security | not checked | | No server code |
+
+## How I got to the overall score
+- Criteria average: 4.5
+- Capped at 4 by [High] Corrections never upload
+- Final: 4.0
+
+## Findings
+### [High] Corrections never upload
+- Class: Defect
+### [Medium] Push alerts lost
+### [low] Typo
+
+SCORE: 4
+VERDICT: FIX_FIRST`;
+
+test("parses the transparency sections", () => {
+  assert.deepEqual(parseFindings(REVIEW).counts, { Critical: 0, High: 1, Medium: 1, Low: 1 });
+  const rows = parseBreakdown(REVIEW);
+  assert.deepEqual(rows.map((r) => [r.criterion, r.score]), [["Data integrity", 3], ["Tests", 6], ["Security", undefined]]);
+  assert.equal(rows[0].evidence, "sync/a.py:10-20");
+  assert.deepEqual(parseScoreSteps(REVIEW), ["Criteria average: 4.5", "Capped at 4 by [High] Corrections never upload", "Final: 4.0"]);
+});
+
+test("the Russian judge is the one furthest below the rest, if far enough", () => {
+  const mk = (title, score) => ({ title, runner: "x", status: "done", output: `SCORE: ${score}`, score });
+  const r = findRussianJudge([mk("A", 8), mk("B", 7.5), mk("C", 4), mk("D", 8.5)]);
+  assert.equal(r.judge.title, "C");
+  assert.equal(r.below, 4);
+  assert.equal(r.flagged, true);
+  assert.equal(findRussianJudge([mk("A", 8), mk("B", 7.5)]).flagged, false);
+  assert.equal(findRussianJudge([mk("A", 8)]), undefined);
+});
+
+test("report calls out the Russian judge and shows each judge's working", () => {
+  const { markdown, russianJudge } = combineReport({
+    repo: "a/b", sha: "0123456789abcdef", goodEnough: 8.5, date: "d",
+    results: [
+      { key: "product", title: "PM", runner: "claude", status: "done", output: "## Summary\nFine.\nSCORE: 8\nVERDICT: FIX_FIRST", score: 8, verdict: "FIX_FIRST" },
+      { key: "code", title: "Eng", runner: "codex", status: "done", output: REVIEW, score: 4, verdict: "FIX_FIRST" },
+      { key: "legal", title: "Counsel", runner: "claude", status: "done", output: "## Summary\nOk.\nSCORE: 7.5\nVERDICT: FIX_FIRST", score: 7.5, verdict: "FIX_FIRST" },
+    ],
+  });
+  assert.deepEqual(russianJudge, { key: "code", title: "Eng", score: 4, below: 3.75 });
+  assert.match(markdown, /> ## 🇷🇺 Eng \(codex\): \*\*4\.0 \/ 10\*\*/);
+  assert.match(markdown, /What sank it: Capped at 4 by \[High\] Corrections never upload/);
+  assert.match(markdown, /Harshest criteria: Data integrity \(3\.0\), Tests \(6\.0\)/);
+  assert.match(markdown, /\| 🇷🇺 \*\*Eng\*\* \(the Russian judge\) \| codex \| \*\*4\*\* \| -3\.8 \| 0\/1\/1\/1 \|/);
+  assert.match(markdown, /### Eng \(codex\): 4\.0\n\n\| Criterion/);
+  assert.match(markdown, /_This judge gave no score breakdown table\._/);
 });
