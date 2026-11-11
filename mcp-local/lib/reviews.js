@@ -94,7 +94,7 @@ async function execute(job, { config, appUrl, checkoutFn = checkout, prInfoFn = 
     }));
 
     const date = new Date().toISOString().slice(0, 10);
-    const { markdown, verdict, panelScore, russianJudge } = combineReport({
+    const { markdown, verdict, panelScore, russianJudges } = combineReport({
       repo: job.repo, sha, pr, focus: job.focus, results: job.judges, goodEnough: config.goodEnough, date,
       russianGap: config.russianGap,
     });
@@ -103,13 +103,13 @@ async function execute(job, { config, appUrl, checkoutFn = checkout, prInfoFn = 
     job.reportPath = join(outDir, `${job.id}.md`);
     await writeFile(job.reportPath, markdown);
     await writeFile(join(outDir, `${job.id}.json`), JSON.stringify({
-      id: job.id, repo: job.repo, sha, pr: job.pr, focus: job.focus, date, verdict, panelScore, russianJudge,
+      id: job.id, repo: job.repo, sha, pr: job.pr, focus: job.focus, date, verdict, panelScore, russianJudges,
       judges: job.judges.map(({ key, title, runner, status, score, verdict: v, seconds, error }) => ({ key, title, runner, status, score, verdict: v, seconds, error })),
     }, null, 2));
     job.report = markdown;
     job.verdict = verdict;
     job.panelScore = panelScore;
-    job.russianJudge = russianJudge;
+    job.russianJudges = russianJudges;
     job.status = "done";
     job.finishedAt = new Date().toISOString();
   } finally {
@@ -136,7 +136,7 @@ function publicView(job, { includeReport = false } = {}) {
   if (job.status === "done") {
     v.verdict = job.verdict;
     v.panel_score = job.panelScore;
-    if (job.russianJudge) v.russian_judge = job.russianJudge;
+    if (job.russianJudges?.length) v.russian_judges = job.russianJudges;
     v.report_path = job.reportPath;
     if (includeReport) v.report = job.report;
   }

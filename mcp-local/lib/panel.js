@@ -130,6 +130,7 @@ export function parseScoreSteps(text) {
 
 // The Russian judge: the judge scoring furthest below the median of the others,
 // called out when that gap is at least `gap` points. Needs two or more scores.
+// Judges tied on the same score as the harshest one are all Russian judges.
 export function findRussianJudge(results, gap = 1.5) {
   const reported = results.filter((r) => r.status === "done" && r.score !== undefined);
   if (reported.length < 2) return undefined;
@@ -139,12 +140,13 @@ export function findRussianJudge(results, gap = 1.5) {
     const below = rest - r.score;
     if (!worst || below > worst.below) worst = { judge: r, rest, below };
   }
-  return { ...worst, flagged: worst.below >= gap, gap };
+  const judges = reported.filter((r) => r.score === worst.judge.score);
+  return { ...worst, judges, flagged: worst.below >= gap, gap };
 }
 
 function whatSetTheScore(r) {
   const steps = parseScoreSteps(r.output);
-  const cap = steps.find((s) => /\bcap/i.test(s));
+  const cap = steps.find((s) => /\bcap/i.test(s) && !/\bno\b[^.]*\bcap/i.test(s));
   if (cap) return cap;
   const { items } = parseFindings(r.output);
   if (items.length) return `Top finding: [${items[0].severity}] ${items[0].title}`;
@@ -180,15 +182,21 @@ export function combineReport({ repo, sha, pr, focus, results, goodEnough, date,
   if (!russian) {
     out.push("Not enough scores to pick one: it takes at least two judges reporting.");
   } else if (russian.flagged) {
-    const r = russian.judge;
-    const low = parseBreakdown(r.output).filter((c) => c.score !== undefined).sort((a, b) => a.score - b.score).slice(0, 3);
-    out.push(`> ## 🇷🇺 ${r.title} (${r.runner}): **${fmt(r.score)} / 10**`);
-    out.push(`> **${fmt(russian.below)} points below the rest of the panel** (the others' median is ${fmt(russian.rest)}).`);
-    const why = whatSetTheScore(r);
-    if (why) out.push(`> What sank it: ${why}`);
-    if (low.length) out.push(`> Harshest criteria: ${low.map((c) => `${c.criterion} (${fmt(c.score)})`).join(", ")}`);
-    out.push("");
-    out.push("The Russian judge isn't wrong just for being harsh. Read its findings first: a low outlier usually means it found something the others missed, or it is holding a different bar. Either way, it's the score to argue with.");
+    const tied = russian.judges.length > 1;
+    if (tied) out.push(`**${russian.judges.length} judges tied as the Russian judge**, each at ${fmt(russian.judge.score)}.`, "");
+    for (const r of russian.judges) {
+      const rest = median(reported.filter((o) => o !== r).map((o) => o.score));
+      const low = parseBreakdown(r.output).filter((c) => c.score !== undefined).sort((a, b) => a.score - b.score).slice(0, 3);
+      out.push(`> ## 🇷🇺 ${r.title} (${r.runner}): **${fmt(r.score)} / 10**`);
+      out.push(`> **${fmt(rest - r.score)} points below the rest of the panel** (the others' median is ${fmt(rest)}).`);
+      const why = whatSetTheScore(r);
+      if (why) out.push(`> What sank it: ${why}`);
+      if (low.length) out.push(`> Harshest criteria: ${low.map((c) => `${c.criterion} (${fmt(c.score)})`).join(", ")}`);
+      out.push("");
+    }
+    out.push(tied
+      ? "When two judges on different AIs land on the same harsh score, it's usually the same problem seen twice. Read their findings first."
+      : "The Russian judge isn't wrong just for being harsh. Read its findings first: a low outlier usually means it found something the others missed, or it is holding a different bar. Either way, it's the score to argue with.");
   } else {
     out.push(`No Russian judge this round. The lowest score, ${fmt(russian.judge.score)} from ${russian.judge.title}, is within ${russian.gap} points of the rest of the panel (${fmt(russian.rest)}).`);
   }
@@ -200,7 +208,7 @@ export function combineReport({ repo, sha, pr, focus, results, goodEnough, date,
   for (const r of results) {
     const ok = r.status === "done";
     const scored = ok && r.score !== undefined;
-    const isRussian = russian?.flagged && russian.judge === r;
+    const isRussian = russian?.flagged && russian.judges.includes(r);
     let vs = "";
     if (scored && reported.length > 1) {
       const d = r.score - median(reported.filter((o) => o !== r).map((o) => o.score));
@@ -246,6 +254,6 @@ export function combineReport({ repo, sha, pr, focus, results, goodEnough, date,
     markdown: out.join("\n"),
     verdict,
     panelScore: panel,
-    russianJudge: russian?.flagged ? { key: russian.judge.key, title: russian.judge.title, score: russian.judge.score, below: russian.below } : undefined,
+    russianJudges: russian?.flagged ? russian.judges.map((r) => ({ key: r.key, title: r.title, score: r.score, below: median(reported.filter((o) => o !== r).map((o) => o.score)) - r.score })) : [],
   };
 }

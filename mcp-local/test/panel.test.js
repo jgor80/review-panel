@@ -146,7 +146,7 @@ test("the Russian judge is the one furthest below the rest, if far enough", () =
 });
 
 test("report calls out the Russian judge and shows each judge's working", () => {
-  const { markdown, russianJudge } = combineReport({
+  const { markdown, russianJudges } = combineReport({
     repo: "a/b", sha: "0123456789abcdef", goodEnough: 8.5, date: "d",
     results: [
       { key: "product", title: "PM", runner: "claude", status: "done", output: "## Summary\nFine.\nSCORE: 8\nVERDICT: FIX_FIRST", score: 8, verdict: "FIX_FIRST" },
@@ -154,11 +154,27 @@ test("report calls out the Russian judge and shows each judge's working", () => 
       { key: "legal", title: "Counsel", runner: "claude", status: "done", output: "## Summary\nOk.\nSCORE: 7.5\nVERDICT: FIX_FIRST", score: 7.5, verdict: "FIX_FIRST" },
     ],
   });
-  assert.deepEqual(russianJudge, { key: "code", title: "Eng", score: 4, below: 3.75 });
+  assert.deepEqual(russianJudges, [{ key: "code", title: "Eng", score: 4, below: 3.75 }]);
   assert.match(markdown, /> ## 🇷🇺 Eng \(codex\): \*\*4\.0 \/ 10\*\*/);
   assert.match(markdown, /What sank it: Capped at 4 by \[High\] Corrections never upload/);
   assert.match(markdown, /Harshest criteria: Data integrity \(3\.0\), Tests \(6\.0\)/);
   assert.match(markdown, /\| 🇷🇺 \*\*Eng\*\* \(the Russian judge\) \| codex \| \*\*4\*\* \| -3\.8 \| 0\/1\/1\/1 \|/);
   assert.match(markdown, /### Eng \(codex\): 4\.0\n\n\| Criterion/);
   assert.match(markdown, /_This judge gave no score breakdown table\._/);
+});
+
+test("judges tied on the harshest score are all Russian judges", () => {
+  const mk = (key, score) => ({ key, title: key, runner: "x", status: "done", output: `## Summary\nx\nSCORE: ${score}`, score });
+  const { markdown, russianJudges } = combineReport({
+    repo: "a/b", sha: "0123456789abcdef", goodEnough: 8.5, date: "d",
+    results: [mk("product", 4), mk("ui", 7.7), mk("code", 4), mk("legal", 5.5)],
+  });
+  assert.deepEqual(russianJudges.map((r) => [r.key, r.below]), [["product", 1.5], ["code", 1.5]]);
+  assert.match(markdown, /2 judges tied as the Russian judge/);
+  const nocap = combineReport({ repo: "a/b", sha: "0123456789abcdef", goodEnough: 8.5, date: "d", results: [
+    { key: "a", title: "A", runner: "x", status: "done", score: 7, output: "## How I got to the overall score\n- Average 7\n- No Critical or High findings, so no cap applies.\n- Final: 7\n\n## Findings\n### [Medium] Leads go nowhere\n\nSCORE: 7" },
+  ] }).markdown;
+  assert.match(nocap, /\| Top finding: \[Medium\] Leads go nowhere \|/);
+  assert.match(markdown, /> ## 🇷🇺 product/);
+  assert.match(markdown, /> ## 🇷🇺 code/);
 });
